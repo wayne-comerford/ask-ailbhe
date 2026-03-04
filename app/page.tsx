@@ -15,6 +15,20 @@ type ChatSession = {
   title: string;
   messages: ChatMessage[];
   updatedAt: number;
+  projectId: string | null;
+};
+
+type Project = {
+  id: string;
+  name: string;
+  updatedAt: number;
+};
+
+type AppState = {
+  projects: Project[];
+  sessions: ChatSession[];
+  activeProjectId: string | null;
+  activeSessionId: string;
 };
 
 type OllamaModel = {
@@ -25,7 +39,7 @@ type ModelsPayload = {
   models?: OllamaModel[];
 };
 
-const STORAGE_KEY = "ask-ailbhe-chat-sessions-v1";
+const STORAGE_KEY = "ask-ailbhe-state-v2";
 const SYSTEM_PROMPT =
   "You are Ask Ailbhe, a helpful local assistant. Keep answers concise, practical, and easy to read.";
 
@@ -34,12 +48,21 @@ const buildId = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-function createSession(): ChatSession {
+function createDefaultProject(): Project {
+  return {
+    id: buildId(),
+    name: "General",
+    updatedAt: Date.now(),
+  };
+}
+
+function createSession(projectId: string | null): ChatSession {
   return {
     id: buildId(),
     title: "New chat",
     messages: [],
     updatedAt: Date.now(),
+    projectId,
   };
 }
 
@@ -70,13 +93,15 @@ const parseAssistantText = (payload: unknown): string | null => {
   return null;
 };
 
-const PROJECTS = ["General", "Family", "Work"];
-
 export default function Home() {
+  const [projects, setProjects] = useState<Project[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState("");
+
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -87,33 +112,87 @@ export default function Home() {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) {
-        const initial = createSession();
-        setSessions([initial]);
-        setActiveSessionId(initial.id);
+        const defaultProject = createDefaultProject();
+        const initialSession = createSession(defaultProject.id);
+        setProjects([defaultProject]);
+        setSessions([initialSession]);
+        setActiveProjectId(defaultProject.id);
+        setActiveSessionId(initialSession.id);
         return;
       }
 
-      const parsed = JSON.parse(raw) as ChatSession[];
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        const initial = createSession();
-        setSessions([initial]);
-        setActiveSessionId(initial.id);
+      const parsed = JSON.parse(raw) as AppState;
+      const safeProjects = Array.isArray(parsed.projects) ? parsed.projects : [];
+      const safeSessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
+
+      if (safeProjects.length === 0) {
+        const defaultProject = createDefaultProject();
+        const initialSession = createSession(defaultProject.id);
+        setProjects([defaultProject]);
+        setSessions([initialSession]);
+        setActiveProjectId(defaultProject.id);
+        setActiveSessionId(initialSession.id);
         return;
       }
 
-      setSessions(parsed);
-      setActiveSessionId(parsed[0].id);
+      setProjects(safeProjects);
+      setSessions(safeSessions.length > 0 ? safeSessions : [createSession(safeProjects[0].id)]);
+      setActiveProjectId(parsed.activeProjectId ?? safeProjects[0].id);
+      setActiveSessionId(
+        parsed.activeSessionId && safeSessions.some((session) => session.id === parsed.activeSessionId)
+          ? parsed.activeSessionId
+          : safeSessions[0]?.id ?? ""
+      );
     } catch {
-      const initial = createSession();
-      setSessions([initial]);
-      setActiveSessionId(initial.id);
+      const defaultProject = createDefaultProject();
+      const initialSession = createSession(defaultProject.id);
+      setProjects([defaultProject]);
+      setSessions([initialSession]);
+      setActiveProjectId(defaultProject.id);
+      setActiveSessionId(initialSession.id);
     }
   }, []);
 
   useEffect(() => {
-    if (sessions.length === 0) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-  }, [sessions]);
+    if (projects.length === 0) return;
+    const state: AppState = {
+      projects,
+      sessions,
+      activeProjectId,
+      activeSessionId,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [projects, sessions, activeProjectId, activeSessionId]);
+
+  useEffect(() => {
+    if (sessions.length === 0) {
+      const newSession = createSession(activeProjectId);
+      setSessions([newSession]);
+      setActiveSessionId(newSession.id);
+      return;
+    }
+    if (!sessions.some((session) => session.id === activeSessionId)) {
+      setActiveSessionId(sessions[0].id);
+    }
+  }, [sessions, activeSessionId, activeProjectId]);
+
+  const sortedProjects = useMemo(
+    () => [...projects].sort((a, b) => b.updatedAt - a.updatedAt),
+    [projects]
+  );
+
+  const sortedSessions = useMemo(
+    () => [...sessions].sort((a, b) => b.updatedAt - a.updatedAt),
+    [sessions]
+  );
+
+  const visibleSessions = useMemo(
+    () =>
+      sortedSessions.filter((session) =>
+        activeProjectId ? session.projectId === activeProjectId : true
+      ),
+    [sortedSessions, activeProjectId]
+  );
 
   const activeSession = useMemo(
     () => sessions.find((session) => session.id === activeSessionId) ?? null,
@@ -122,11 +201,6 @@ export default function Home() {
 
   const messages = useMemo(() => activeSession?.messages ?? [], [activeSession]);
   const hasMessages = messages.length > 0;
-
-  const sortedSessions = useMemo(
-    () => [...sessions].sort((a, b) => b.updatedAt - a.updatedAt),
-    [sessions]
-  );
 
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: "smooth" });
@@ -151,10 +225,10 @@ export default function Home() {
     }
   }
 
-  function updateActiveSession(nextMessages: ChatMessage[]) {
+  function updateSession(sessionId: string, nextMessages: ChatMessage[]) {
     setSessions((prev) =>
       prev.map((session) =>
-        session.id === activeSessionId
+        session.id === sessionId
           ? {
               ...session,
               messages: nextMessages,
@@ -167,12 +241,16 @@ export default function Home() {
   }
 
   async function submitPrompt() {
-    if (!draft.trim() || loading || !activeSession) {
+    if (!draft.trim() || loading) {
       return;
     }
 
     if (!selectedModel) {
       setError("No model available");
+      return;
+    }
+
+    if (!activeSession) {
       return;
     }
 
@@ -186,7 +264,7 @@ export default function Home() {
     };
 
     const nextMessages = [...activeSession.messages, userMessage];
-    updateActiveSession(nextMessages);
+    updateSession(activeSession.id, nextMessages);
     setDraft("");
 
     const apiMessages = [
@@ -215,7 +293,7 @@ export default function Home() {
         throw new Error("Assistant returned empty response");
       }
 
-      updateActiveSession([
+      updateSession(activeSession.id, [
         ...nextMessages,
         {
           id: buildId(),
@@ -223,6 +301,16 @@ export default function Home() {
           content: assistantText,
         },
       ]);
+
+      if (activeSession.projectId) {
+        setProjects((prev) =>
+          prev.map((project) =>
+            project.id === activeSession.projectId
+              ? { ...project, updatedAt: Date.now() }
+              : project
+          )
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setError(message);
@@ -238,18 +326,45 @@ export default function Home() {
     }
   };
 
-  const startNewChat = () => {
-    const created = createSession();
+  function startNewChat() {
+    const created = createSession(activeProjectId);
     setSessions((prev) => [created, ...prev]);
     setActiveSessionId(created.id);
     setError(null);
     setDraft("");
-  };
+  }
+
+  function addProject() {
+    const name = newProjectName.trim();
+    if (!name) return;
+    const created: Project = {
+      id: buildId(),
+      name,
+      updatedAt: Date.now(),
+    };
+    setProjects((prev) => [created, ...prev]);
+    setActiveProjectId(created.id);
+    setNewProjectName("");
+  }
+
+  function deleteProject(projectId: string) {
+    setProjects((prev) => prev.filter((project) => project.id !== projectId));
+    setSessions((prev) => prev.filter((session) => session.projectId !== projectId));
+
+    if (activeProjectId === projectId) {
+      const remaining = sortedProjects.filter((project) => project.id !== projectId);
+      setActiveProjectId(remaining[0]?.id ?? null);
+    }
+  }
+
+  function deleteChat(sessionId: string) {
+    setSessions((prev) => prev.filter((session) => session.id !== sessionId));
+  }
 
   return (
     <div className="min-h-screen bg-[#212121] text-[#ececec]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px]">
-        <aside className="hidden w-[280px] shrink-0 border-r border-[#303030] bg-[#171717] px-3 py-4 md:flex md:flex-col">
+        <aside className="hidden w-[300px] shrink-0 border-r border-[#303030] bg-[#171717] px-3 py-4 md:flex md:flex-col">
           <button
             type="button"
             onClick={startNewChat}
@@ -260,44 +375,102 @@ export default function Home() {
 
           <div className="mt-6">
             <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-[#9a9a9a]">Projects</h2>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={newProjectName}
+                onChange={(event) => setNewProjectName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addProject();
+                  }
+                }}
+                placeholder="New project"
+                className="w-full rounded-md border border-[#3f3f3f] bg-[#242424] px-2 py-1.5 text-sm focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={addProject}
+                className="rounded-md border border-[#3f3f3f] px-2 text-sm hover:bg-[#2a2a2a]"
+              >
+                Add
+              </button>
+            </div>
             <div className="mt-2 space-y-1">
-              {PROJECTS.map((project) => (
-                <button
-                  key={project}
-                  type="button"
-                  className="w-full rounded-md px-2 py-1.5 text-left text-sm text-[#cfcfcf] hover:bg-[#242424]"
-                >
-                  {project}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => setActiveProjectId(null)}
+                className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
+                  activeProjectId === null
+                    ? "bg-[#2f2f2f] text-[#f1f1f1]"
+                    : "text-[#cfcfcf] hover:bg-[#242424]"
+                }`}
+              >
+                <span>All chats</span>
+              </button>
+              {sortedProjects.map((project) => {
+                const active = project.id === activeProjectId;
+                return (
+                  <div
+                    key={project.id}
+                    className={`flex items-center justify-between rounded-md px-2 py-1.5 text-sm ${
+                      active ? "bg-[#2f2f2f] text-[#f1f1f1]" : "text-[#cfcfcf] hover:bg-[#242424]"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveProjectId(project.id)}
+                      className="min-w-0 flex-1 truncate text-left"
+                      title={project.name}
+                    >
+                      {project.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteProject(project.id)}
+                      className="ml-2 text-xs text-[#9b9b9b] hover:text-[#ff8d8d]"
+                      aria-label={`Delete project ${project.name}`}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           <div className="mt-6 min-h-0 flex-1 overflow-y-auto">
             <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-[#9a9a9a]">Your chats</h2>
             <div className="mt-2 space-y-1">
-              {sortedSessions.map((session) => {
+              {visibleSessions.map((session) => {
                 const active = session.id === activeSessionId;
                 return (
-                  <button
+                  <div
                     key={session.id}
-                    type="button"
-                    onClick={() => setActiveSessionId(session.id)}
-                    className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${
+                    className={`flex items-center justify-between rounded-md px-2 py-1.5 text-sm ${
                       active ? "bg-[#2f2f2f] text-[#f1f1f1]" : "text-[#cfcfcf] hover:bg-[#242424]"
                     }`}
-                    title={session.title}
                   >
-                    <span className="block truncate">{session.title}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveSessionId(session.id)}
+                      className="min-w-0 flex-1 truncate text-left"
+                      title={session.title}
+                    >
+                      {session.title}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteChat(session.id)}
+                      className="ml-2 text-xs text-[#9b9b9b] hover:text-[#ff8d8d]"
+                      aria-label={`Delete chat ${session.title}`}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 );
               })}
             </div>
-          </div>
-
-          <div className="mt-4 border-t border-[#2d2d2d] pt-3 text-xs text-[#9b9b9b]">
-            <p className="font-medium text-[#cfcfcf]">Ask Ailbhe</p>
-            <p>Pronounced Alva</p>
           </div>
         </aside>
 
