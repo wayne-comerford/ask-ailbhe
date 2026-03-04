@@ -10,6 +10,13 @@ type ChatMessage = {
   content: string;
 };
 
+type ChatSession = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  updatedAt: number;
+};
+
 type OllamaModel = {
   name: string;
 };
@@ -18,6 +25,7 @@ type ModelsPayload = {
   models?: OllamaModel[];
 };
 
+const STORAGE_KEY = "ask-ailbhe-chat-sessions-v1";
 const SYSTEM_PROMPT =
   "You are Ask Ailbhe, a helpful local assistant. Keep answers concise, practical, and easy to read.";
 
@@ -25,6 +33,21 @@ const buildId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
+
+function createSession(): ChatSession {
+  return {
+    id: buildId(),
+    title: "New chat",
+    messages: [],
+    updatedAt: Date.now(),
+  };
+}
+
+function buildTitle(messages: ChatMessage[]): string {
+  const firstUser = messages.find((message) => message.role === "user");
+  if (!firstUser) return "New chat";
+  return firstUser.content.slice(0, 42) + (firstUser.content.length > 42 ? "..." : "");
+}
 
 const parseAssistantText = (payload: unknown): string | null => {
   if (!payload || typeof payload !== "object") {
@@ -47,8 +70,11 @@ const parseAssistantText = (payload: unknown): string | null => {
   return null;
 };
 
+const PROJECTS = ["General", "Family", "Work"];
+
 export default function Home() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -57,13 +83,54 @@ export default function Home() {
 
   useEffect(() => {
     void fetchModels();
+
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        const initial = createSession();
+        setSessions([initial]);
+        setActiveSessionId(initial.id);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as ChatSession[];
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        const initial = createSession();
+        setSessions([initial]);
+        setActiveSessionId(initial.id);
+        return;
+      }
+
+      setSessions(parsed);
+      setActiveSessionId(parsed[0].id);
+    } catch {
+      const initial = createSession();
+      setSessions([initial]);
+      setActiveSessionId(initial.id);
+    }
   }, []);
+
+  useEffect(() => {
+    if (sessions.length === 0) return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  }, [sessions]);
+
+  const activeSession = useMemo(
+    () => sessions.find((session) => session.id === activeSessionId) ?? null,
+    [sessions, activeSessionId]
+  );
+
+  const messages = useMemo(() => activeSession?.messages ?? [], [activeSession]);
+  const hasMessages = messages.length > 0;
+
+  const sortedSessions = useMemo(
+    () => [...sessions].sort((a, b) => b.updatedAt - a.updatedAt),
+    [sessions]
+  );
 
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
-
-  const hasMessages = useMemo(() => messages.length > 0, [messages]);
 
   async function fetchModels() {
     try {
@@ -84,8 +151,23 @@ export default function Home() {
     }
   }
 
+  function updateActiveSession(nextMessages: ChatMessage[]) {
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === activeSessionId
+          ? {
+              ...session,
+              messages: nextMessages,
+              title: buildTitle(nextMessages),
+              updatedAt: Date.now(),
+            }
+          : session
+      )
+    );
+  }
+
   async function submitPrompt() {
-    if (!draft.trim() || loading) {
+    if (!draft.trim() || loading || !activeSession) {
       return;
     }
 
@@ -103,8 +185,8 @@ export default function Home() {
       content: draft.trim(),
     };
 
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
+    const nextMessages = [...activeSession.messages, userMessage];
+    updateActiveSession(nextMessages);
     setDraft("");
 
     const apiMessages = [
@@ -133,7 +215,7 @@ export default function Home() {
         throw new Error("Assistant returned empty response");
       }
 
-      setMessages([
+      updateActiveSession([
         ...nextMessages,
         {
           id: buildId(),
@@ -157,7 +239,9 @@ export default function Home() {
   };
 
   const startNewChat = () => {
-    setMessages([]);
+    const created = createSession();
+    setSessions((prev) => [created, ...prev]);
+    setActiveSessionId(created.id);
     setError(null);
     setDraft("");
   };
@@ -165,7 +249,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#212121] text-[#ececec]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px]">
-        <aside className="hidden w-[260px] shrink-0 border-r border-[#303030] bg-[#171717] p-3 md:flex md:flex-col">
+        <aside className="hidden w-[280px] shrink-0 border-r border-[#303030] bg-[#171717] px-3 py-4 md:flex md:flex-col">
           <button
             type="button"
             onClick={startNewChat}
@@ -173,10 +257,47 @@ export default function Home() {
           >
             + New chat
           </button>
-          <div className="mt-6 text-xs text-[#9b9b9b]">
+
+          <div className="mt-6">
+            <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-[#9a9a9a]">Projects</h2>
+            <div className="mt-2 space-y-1">
+              {PROJECTS.map((project) => (
+                <button
+                  key={project}
+                  type="button"
+                  className="w-full rounded-md px-2 py-1.5 text-left text-sm text-[#cfcfcf] hover:bg-[#242424]"
+                >
+                  {project}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 min-h-0 flex-1 overflow-y-auto">
+            <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-[#9a9a9a]">Your chats</h2>
+            <div className="mt-2 space-y-1">
+              {sortedSessions.map((session) => {
+                const active = session.id === activeSessionId;
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => setActiveSessionId(session.id)}
+                    className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${
+                      active ? "bg-[#2f2f2f] text-[#f1f1f1]" : "text-[#cfcfcf] hover:bg-[#242424]"
+                    }`}
+                    title={session.title}
+                  >
+                    <span className="block truncate">{session.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-4 border-t border-[#2d2d2d] pt-3 text-xs text-[#9b9b9b]">
             <p className="font-medium text-[#cfcfcf]">Ask Ailbhe</p>
             <p>Pronounced Alva</p>
-            <p className="mt-2">Model: {selectedModel || "loading..."}</p>
           </div>
         </aside>
 
@@ -184,13 +305,22 @@ export default function Home() {
           <header className="border-b border-[#303030] bg-[#212121]/95 px-4 py-3 backdrop-blur md:px-6">
             <div className="flex items-center justify-between">
               <h1 className="text-sm font-medium">Ask Ailbhe</h1>
-              <button
-                type="button"
-                onClick={() => void fetchModels()}
-                className="rounded-md border border-[#3f3f3f] px-2.5 py-1 text-xs text-[#cfcfcf] hover:bg-[#2a2a2a]"
-              >
-                Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={startNewChat}
+                  className="rounded-md border border-[#3f3f3f] px-2.5 py-1 text-xs text-[#cfcfcf] hover:bg-[#2a2a2a] md:hidden"
+                >
+                  New chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void fetchModels()}
+                  className="rounded-md border border-[#3f3f3f] px-2.5 py-1 text-xs text-[#cfcfcf] hover:bg-[#2a2a2a]"
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
           </header>
 
@@ -199,7 +329,7 @@ export default function Home() {
               {!hasMessages && (
                 <div className="pt-16 text-center">
                   <h2 className="text-3xl font-semibold tracking-tight">Ask Ailbhe</h2>
-                  <p className="mt-3 text-sm text-[#a0a0a0]">How can I help you today?</p>
+                  <p className="mt-3 text-sm text-[#a0a0a0]">What is on your mind today?</p>
                 </div>
               )}
 
@@ -209,9 +339,7 @@ export default function Home() {
                   <div key={message.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
                     <article
                       className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-7 ${
-                        isUser
-                          ? "bg-[#303030] text-[#ececec]"
-                          : "bg-transparent text-[#ececec]"
+                        isUser ? "bg-[#303030] text-[#ececec]" : "bg-transparent text-[#ececec]"
                       }`}
                     >
                       <p className="whitespace-pre-wrap">{message.content}</p>
