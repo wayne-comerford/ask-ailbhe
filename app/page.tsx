@@ -102,6 +102,7 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -345,6 +346,7 @@ export default function Home() {
     setProjects((prev) => [created, ...prev]);
     setActiveProjectId(created.id);
     setNewProjectName("");
+    setCreatingProject(false);
   }
 
   function deleteProject(projectId: string) {
@@ -410,39 +412,43 @@ export default function Home() {
 
           <div className="mt-6">
             <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-[#9a9a9a]">Projects</h2>
-            <div className="mt-2 flex gap-2">
-              <input
-                value={newProjectName}
-                onChange={(event) => setNewProjectName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addProject();
-                  }
-                }}
-                placeholder="New project"
-                className="w-full rounded-md border border-[#3f3f3f] bg-[#242424] px-2 py-1.5 text-sm focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={addProject}
-                className="rounded-md border border-[#3f3f3f] px-2 text-sm hover:bg-[#2a2a2a]"
-              >
-                Add
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setCreatingProject(true)}
+              className="mt-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[#cfcfcf] hover:bg-[#242424]"
+            >
+              <span aria-hidden>+</span>
+              <span>New project</span>
+            </button>
+            {creatingProject && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={newProjectName}
+                  onChange={(event) => setNewProjectName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addProject();
+                    }
+                    if (event.key === "Escape") {
+                      setCreatingProject(false);
+                      setNewProjectName("");
+                    }
+                  }}
+                  placeholder="Project name"
+                  className="w-full rounded-md border border-[#3f3f3f] bg-[#242424] px-2 py-1.5 text-sm focus:outline-none"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={addProject}
+                  className="rounded-md border border-[#3f3f3f] px-2 text-sm hover:bg-[#2a2a2a]"
+                >
+                  Add
+                </button>
+              </div>
+            )}
             <div className="mt-2 space-y-1">
-              <button
-                type="button"
-                onClick={() => setActiveProjectId(null)}
-                className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
-                  activeProjectId === null
-                    ? "bg-[#2f2f2f] text-[#f1f1f1]"
-                    : "text-[#cfcfcf] hover:bg-[#242424]"
-                }`}
-              >
-                <span>All chats</span>
-              </button>
               {sortedProjects.map((project) => {
                 const active = project.id === activeProjectId;
                 return (
@@ -458,6 +464,9 @@ export default function Home() {
                       className="min-w-0 flex-1 truncate text-left"
                       title={project.name}
                     >
+                      <span className="mr-2 inline-block text-[#9a9a9a]" aria-hidden>
+                        []
+                      </span>
                       {project.name}
                     </button>
                     <button
@@ -475,7 +484,16 @@ export default function Home() {
           </div>
 
           <div className="mt-6 min-h-0 flex-1 overflow-y-auto">
-            <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-[#9a9a9a]">Your chats</h2>
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-xs font-medium uppercase tracking-wide text-[#9a9a9a]">Your chats</h2>
+              <button
+                type="button"
+                onClick={() => setActiveProjectId(null)}
+                className="text-[11px] text-[#9a9a9a] hover:text-[#d6d6d6]"
+              >
+                Show all
+              </button>
+            </div>
             <div className="mt-2 space-y-1">
               {visibleSessions.map((session) => {
                 const active = session.id === activeSessionId;
