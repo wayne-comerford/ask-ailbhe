@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { ollamaFetchWithBase } from "../utils";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 type ModelItem = {
   name: string;
   title?: string;

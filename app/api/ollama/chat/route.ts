@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDefaultModel, ollamaFetchWithBase } from "../utils";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
