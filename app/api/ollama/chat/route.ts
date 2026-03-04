@@ -13,18 +13,45 @@ type ChatRequest = {
   maxTokens?: number;
 };
 
+type OllamaChatResponse = {
+  message?: {
+    role?: "assistant";
+    content?: string;
+  };
+  done_reason?: string;
+};
+
 const thinkByDefault = (process.env.OLLAMA_THINK ?? "false").toLowerCase() === "true";
 const defaultNumPredict = Number.parseInt(process.env.OLLAMA_NUM_PREDICT ?? "160", 10);
+const autoContinueSteps = Number.parseInt(process.env.OLLAMA_AUTO_CONTINUE_STEPS ?? "2", 10);
+const continuationPrompt =
+  process.env.OLLAMA_CONTINUE_PROMPT ??
+  "Continue exactly where you stopped. Do not repeat earlier text. Finish the answer naturally.";
+
+function toResponse(data: unknown): OllamaChatResponse {
+  if (!data || typeof data !== "object") {
+    return {};
+  }
+  const record = data as Record<string, unknown>;
+  const message =
+    record.message && typeof record.message === "object"
+      ? (record.message as Record<string, unknown>)
+      : undefined;
+  return {
+    done_reason: typeof record.done_reason === "string" ? record.done_reason : undefined,
+    message: {
+      role: "assistant",
+      content: typeof message?.content === "string" ? message.content : "",
+    },
+  };
+}
 
 export async function POST(request: NextRequest) {
   let body: ChatRequest;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON payload" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
   if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
@@ -33,13 +60,6 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-
-  const payload: Record<string, unknown> = {
-    model: body.model ?? getDefaultModel(),
-    messages: body.messages,
-    stream: false,
-    think: thinkByDefault,
-  };
 
   const options: Record<string, unknown> = {};
   if (typeof body.temperature === "number") {
@@ -50,22 +70,62 @@ export async function POST(request: NextRequest) {
   } else if (Number.isFinite(defaultNumPredict) && defaultNumPredict > 0) {
     options.num_predict = defaultNumPredict;
   }
-  if (Object.keys(options).length > 0) {
-    payload.options = options;
-  }
+
+  const model = body.model ?? getDefaultModel();
+  let messages = [...body.messages];
+  let combinedContent = "";
+  let finalResponse: OllamaChatResponse = {};
+  let activeBaseUrl = "";
 
   try {
-    const response = await ollamaFetchWithBase("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    const maxSteps = Number.isFinite(autoContinueSteps) && autoContinueSteps >= 0 ? autoContinueSteps : 0;
+
+    for (let step = 0; step <= maxSteps; step += 1) {
+      const payload: Record<string, unknown> = {
+        model,
+        messages,
+        stream: false,
+        think: thinkByDefault,
+      };
+      if (Object.keys(options).length > 0) {
+        payload.options = options;
+      }
+
+      const response = await ollamaFetchWithBase<OllamaChatResponse>("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      activeBaseUrl = response.baseUrl;
+      const normalized = toResponse(response.data);
+      const chunk = normalized.message?.content?.trim() ?? "";
+      if (chunk.length > 0) {
+        combinedContent = combinedContent ? `${combinedContent}\n\n${chunk}` : chunk;
+      }
+
+      finalResponse = normalized;
+
+      if (normalized.done_reason !== "length") {
+        break;
+      }
+
+      messages = [
+        ...messages,
+        { role: "assistant", content: chunk },
+        { role: "user", content: continuationPrompt },
+      ];
+    }
 
     return NextResponse.json({
-      ...(response.data as Record<string, unknown>),
-      _meta: { baseUrl: response.baseUrl },
+      message: {
+        role: "assistant",
+        content: combinedContent,
+      },
+      done_reason: finalResponse.done_reason,
+      _meta: { baseUrl: activeBaseUrl },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
