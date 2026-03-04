@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+/* ===== Light Theme (default) ===== */
+:root {
+  --cs-bg-gradient-start: #f0e6ff;
+  --cs-bg-gradient-end: #f8f9fc;
+  --cs-bg-card: rgba(255, 255, 255, 0.95);
+  --cs-bg-elevated: rgba(243, 244, 246, 0.9);
+  --cs-bg-inset: #f3f4f6;
+  --cs-bg-interactive: #e5e7eb;
+  --cs-bg-interactive-hover: #d1d5db;
+  --cs-bg-input: #ffffff;
+  --cs-bg-dropdown: #ffffff;
+  --cs-bg-dropdown-hover: #f3f4f6;
+  --cs-bg-tab: #e5e7eb;
+  --cs-bg-tab-disabled: #f9fafb;
+  --cs-bg-badge: #e5e7eb;
+  --cs-bg-confidence: #e5e7eb;
+  --cs-border: #d1d5db;
+  --cs-border-subtle: rgba(229, 231, 235, 0.5);
+  --cs-border-medium: #d1d5db;
+  --cs-border-input: #cbd5e1;
+  --cs-border-input-focus: #a78bfa;
+  --cs-text-primary: #111827;
+  --cs-text-secondary: #374151;
+  --cs-text-tertiary: #4b5563;
+  --cs-text-muted: #4b5563;
+  --cs-text-faint: #9ca3af;
+  --cs-text-disabled: #d1d5db;
+  --cs-hover-overlay: rgba(0, 0, 0, 0.05);
+  --cs-ring-track: rgba(209, 213, 219, 0.5);
+  --cs-card-border-success: rgba(16, 185, 129, 0.3);
+  --cs-card-border-warning: rgba(245, 158, 11, 0.3);
+  --cs-card-border-wait: rgba(156, 163, 175, 0.3);
+  --cs-card-border-bus: rgba(234, 179, 8, 0.3);
+  --cs-alert-disruption-bg: rgba(254, 226, 226, 0.5);
+  --cs-alert-disruption-border: rgba(239, 68, 68, 0.45);
+  --cs-alert-works-bg: rgba(254, 243, 199, 0.5);
+  --cs-alert-works-border: rgba(245, 158, 11, 0.45);
+  --cs-alert-delay-bg: rgba(254, 249, 195, 0.5);
+  --cs-alert-delay-border: rgba(234, 179, 8, 0.45);
+  --cs-alert-info-bg: #f3f4f6;
+  --cs-alert-info-border: rgba(209, 213, 219, 0.8);
+  --cs-alert-expanded-border: rgba(229, 231, 235, 0.5);
+}
+
+/* ===== Dark Theme ===== */
+.dark {
+  --cs-bg-gradient-start: #1a0a2e;
+  --cs-bg-gradient-end: #09090b;
+  --cs-bg-card: rgba(24, 24, 27, 0.5);
+  --cs-bg-elevated: rgba(9, 9, 11, 0.4);
+  --cs-bg-inset: rgba(9, 9, 11, 0.3);
+  --cs-bg-interactive: #27272a;
+  --cs-bg-interactive-hover: #3f3f46;
+  --cs-bg-input: rgba(9, 9, 11, 0.55);
+  --cs-bg-dropdown: #18181b;
+  --cs-bg-dropdown-hover: #27272a;
+  --cs-bg-tab: rgba(24, 24, 27, 0.6);
+  --cs-bg-tab-disabled: rgba(24, 24, 27, 0.2);
+  --cs-bg-badge: rgba(39, 39, 42, 0.7);
+  --cs-bg-confidence: #27272a;
+  --cs-border: #3f3f46;
+  --cs-border-subtle: rgba(63, 63, 70, 0.5);
+  --cs-border-medium: #3f3f46;
+  --cs-border-input: #3f3f46;
+  --cs-border-input-focus: #52525b;
+  --cs-text-primary: #fafafa;
+  --cs-text-secondary: #e4e4e7;
+  --cs-text-tertiary: #d4d4d8;
+  --cs-text-muted: #b3b3bd;
+  --cs-text-faint: #71717a;
+  --cs-text-disabled: #52525b;
+  --cs-hover-overlay: rgba(255, 255, 255, 0.05);
+  --cs-ring-track: rgba(63, 63, 70, 0.5);
+  --cs-card-border-success: rgba(6, 78, 59, 0.4);
+  --cs-card-border-warning: rgba(146, 64, 14, 0.3);
+  --cs-card-border-wait: rgba(63, 63, 70, 0.4);
+  --cs-card-border-bus: rgba(133, 118, 16, 0.3);
+  --cs-alert-disruption-bg: rgba(69, 10, 10, 0.2);
+  --cs-alert-disruption-border: rgba(153, 27, 27, 0.75);
+  --cs-alert-works-bg: rgba(69, 46, 3, 0.2);
+  --cs-alert-works-border: rgba(146, 64, 14, 0.75);
+  --cs-alert-delay-bg: rgba(69, 63, 3, 0.2);
+  --cs-alert-delay-border: rgba(133, 118, 16, 0.75);
+  --cs-alert-info-bg: rgba(24, 24, 27, 0.3);
+  --cs-alert-info-border: rgba(63, 63, 70, 0.75);
+  --cs-alert-expanded-border: rgba(39, 39, 42, 0.5);
+}
+
+@theme inline {
+  --color-surface: var(--cs-bg-card);
+  --color-surface-elevated: var(--cs-bg-elevated);
+  --color-surface-inset: var(--cs-bg-inset);
+  --color-interactive: var(--cs-bg-interactive);
+  --color-interactive-hover: var(--cs-bg-interactive-hover);
+  --color-cs-input: var(--cs-bg-input);
+  --color-dropdown: var(--cs-bg-dropdown);
+  --color-dropdown-hover: var(--cs-bg-dropdown-hover);
+  --color-tab: var(--cs-bg-tab);
+  --color-tab-disabled: var(--cs-bg-tab-disabled);
+  --color-badge: var(--cs-bg-badge);
+  --color-confidence: var(--cs-bg-confidence);
+  --color-cs-border: var(--cs-border);
+  --color-cs-border-subtle: var(--cs-border-subtle);
+  --color-cs-border-medium: var(--cs-border-medium);
+  --color-cs-border-input: var(--cs-border-input);
+  --color-cs-border-input-focus: var(--cs-border-input-focus);
+  --color-text-primary: var(--cs-text-primary);
+  --color-text-secondary: var(--cs-text-secondary);
+  --color-text-tertiary: var(--cs-text-tertiary);
+  --color-text-muted: var(--cs-text-muted);
+  --color-text-faint: var(--cs-text-faint);
+  --color-text-disabled: var(--cs-text-disabled);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--cs-bg-card);
+  color: var(--cs-text-primary);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Live pulse indicator */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.animate-pulse-live {
+  animation: pulse-live 2s ease-in-out infinite;
+}
+
+/* Subtle glow behind recommendation card */
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+.animate-glow {
+  animation: glow-breathe 4s ease-in-out infinite;
+}
