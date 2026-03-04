@@ -28,3 +28,5 @@ Ailbhe is pronounced "Alva".
 
 - `OLLAMA_DEFAULT_MODEL` (default: `llama3`)
 - `OLLAMA_TIMEOUT_MS` (default: `20000`)
+- `OLLAMA_NUM_PREDICT` (default: `160`)
+- `OLLAMA_THINK` (default: `false`)

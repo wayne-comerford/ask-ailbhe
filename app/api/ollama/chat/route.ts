@@ -13,6 +13,9 @@ type ChatRequest = {
   maxTokens?: number;
 };
 
+const thinkByDefault = (process.env.OLLAMA_THINK ?? "false").toLowerCase() === "true";
+const defaultNumPredict = Number.parseInt(process.env.OLLAMA_NUM_PREDICT ?? "160", 10);
+
 export async function POST(request: NextRequest) {
   let body: ChatRequest;
   try {
@@ -35,6 +38,7 @@ export async function POST(request: NextRequest) {
     model: body.model ?? getDefaultModel(),
     messages: body.messages,
     stream: false,
+    think: thinkByDefault,
   };
 
   const options: Record<string, unknown> = {};
@@ -43,6 +47,8 @@ export async function POST(request: NextRequest) {
   }
   if (typeof body.maxTokens === "number") {
     options.num_predict = body.maxTokens;
+  } else if (Number.isFinite(defaultNumPredict) && defaultNumPredict > 0) {
+    options.num_predict = defaultNumPredict;
   }
   if (Object.keys(options).length > 0) {
     payload.options = options;
