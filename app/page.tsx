@@ -23,7 +23,7 @@ type ModelsPayload = {
 };
 
 const DEFAULT_SYSTEM_PROMPT =
-  "You are Ask Albhe, a helpful local assistant. Be clear, practical, and concise.";
+  "You are Ask Ailbhe, a helpful local assistant. Be clear, practical, and concise.";
 const DEFAULT_TEMPERATURE = "0.2";
 
 const buildId = () =>
@@ -153,7 +153,7 @@ export default function Home() {
     const conversation = [...messages, userMessage];
     setMessages(conversation);
     setDraft("");
-    setStatusMessage("Albhe is thinking...");
+    setStatusMessage("Ailbhe is thinking...");
 
     try {
       const payload: Record<string, unknown> = {
@@ -225,7 +225,7 @@ export default function Home() {
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px] gap-0">
         <aside className="hidden w-[280px] border-r border-slate-800/80 bg-[#0f1728] p-4 md:flex md:flex-col md:gap-4">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">Ask Albhe</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Ask Ailbhe</h1>
             <p className="text-xs text-slate-400">Pronounced Alva</p>
           </div>
           <button
@@ -284,7 +284,7 @@ export default function Home() {
         <main className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-center justify-between border-b border-slate-800/80 bg-[#0b1324]/95 px-4 py-3 backdrop-blur md:px-6">
             <div>
-              <p className="text-sm font-semibold">Ask Albhe</p>
+              <p className="text-sm font-semibold">Ask Ailbhe</p>
               <p className="text-xs text-slate-400 md:hidden">Pronounced Alva</p>
             </div>
             <div className="flex items-center gap-2">
@@ -313,7 +313,7 @@ export default function Home() {
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
               {publicMessages.length === 0 && (
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-center">
-                  <p className="text-lg font-medium">Ask Albhe anything</p>
+                  <p className="text-lg font-medium">Ask Ailbhe anything</p>
                   <p className="mt-2 text-sm text-slate-400">
                     Start with a question, task, or draft prompt.
                   </p>
@@ -340,7 +340,7 @@ export default function Home() {
               {loading && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-300">
-                    Albhe is thinking...
+                    Ailbhe is thinking...
                   </div>
                 </div>
               )}
@@ -356,7 +356,7 @@ export default function Home() {
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={onKeyDown}
-                  placeholder="Message Ask Albhe..."
+                  placeholder="Message Ask Ailbhe..."
                   className="w-full resize-none bg-transparent px-2 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
                   disabled={loading}
                 />

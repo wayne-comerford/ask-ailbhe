@@ -3,8 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "./components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Ask Albhe",
-  description: "Ask Albhe - on-prem Ollama chat",
+  title: "Ask Ailbhe",
+  description: "Ask Ailbhe - on-prem Ollama chat",
 };
 
 export default function RootLayout({

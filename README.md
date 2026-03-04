@@ -1,8 +1,8 @@
-# Ask Albhe
+# Ask Ailbhe
 
 ChatGPT-style web UI for a single on-prem Ollama instance.
 
-Albhe is pronounced "Alva".
+Ailbhe is pronounced "Alva".
 
 ## Setup
 
