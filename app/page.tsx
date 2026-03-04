@@ -361,6 +361,41 @@ export default function Home() {
     setSessions((prev) => prev.filter((session) => session.id !== sessionId));
   }
 
+  function convertChatToProject(sessionId: string) {
+    const session = sessions.find((entry) => entry.id === sessionId);
+    if (!session) return;
+
+    const baseName = session.title.trim() || "New project";
+    const existingNames = new Set(projects.map((project) => project.name.toLowerCase()));
+    let projectName = baseName;
+    let suffix = 2;
+    while (existingNames.has(projectName.toLowerCase())) {
+      projectName = `${baseName} ${suffix}`;
+      suffix += 1;
+    }
+
+    const newProject: Project = {
+      id: buildId(),
+      name: projectName,
+      updatedAt: Date.now(),
+    };
+
+    setProjects((prev) => [newProject, ...prev]);
+    setSessions((prev) =>
+      prev.map((entry) =>
+        entry.id === sessionId
+          ? {
+              ...entry,
+              projectId: newProject.id,
+              updatedAt: Date.now(),
+            }
+          : entry
+      )
+    );
+    setActiveProjectId(newProject.id);
+    setActiveSessionId(sessionId);
+  }
+
   return (
     <div className="min-h-screen bg-[#212121] text-[#ececec]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px]">
@@ -458,6 +493,14 @@ export default function Home() {
                       title={session.title}
                     >
                       {session.title}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => convertChatToProject(session.id)}
+                      className="ml-2 text-xs text-[#9b9b9b] hover:text-[#d6d6d6]"
+                      aria-label={`Convert chat ${session.title} to project`}
+                    >
+                      To project
                     </button>
                     <button
                       type="button"
