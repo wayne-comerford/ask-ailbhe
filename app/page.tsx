@@ -72,27 +72,6 @@ function buildTitle(messages: ChatMessage[]): string {
   return firstUser.content.slice(0, 42) + (firstUser.content.length > 42 ? "..." : "");
 }
 
-const parseAssistantText = (payload: unknown): string | null => {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-  const data = payload as Record<string, unknown>;
-  const message =
-    data.message && typeof data.message === "object"
-      ? (data.message as Record<string, unknown>)
-      : null;
-
-  if (typeof message?.content === "string" && message.content.trim()) {
-    return message.content.trim();
-  }
-
-  if (typeof data.response === "string" && data.response.trim()) {
-    return data.response.trim();
-  }
-
-  return null;
-};
-
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -241,6 +220,27 @@ export default function Home() {
     );
   }
 
+  function appendAssistantChunk(sessionId: string, assistantId: string, chunk: string) {
+    setSessions((prev) =>
+      prev.map((session) => {
+        if (session.id !== sessionId) return session;
+        const next = [...session.messages];
+        const index = next.findIndex((message) => message.id === assistantId);
+        if (index < 0) return session;
+        next[index] = {
+          ...next[index],
+          content: next[index].content + chunk,
+        };
+        return {
+          ...session,
+          messages: next,
+          title: buildTitle(next),
+          updatedAt: Date.now(),
+        };
+      })
+    );
+  }
+
   async function submitPrompt() {
     if (!draft.trim() || loading) {
       return;
@@ -264,7 +264,12 @@ export default function Home() {
       content: draft.trim(),
     };
 
-    const nextMessages = [...activeSession.messages, userMessage];
+    const assistantId = buildId();
+    const nextMessages = [
+      ...activeSession.messages,
+      userMessage,
+      { id: assistantId, role: "assistant" as const, content: "" },
+    ];
     updateSession(activeSession.id, nextMessages);
     setDraft("");
 
@@ -274,7 +279,7 @@ export default function Home() {
     ];
 
     try {
-      const response = await fetch("/api/ollama/chat", {
+      const response = await fetch("/api/ollama/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -288,20 +293,53 @@ export default function Home() {
         throw new Error(body || "Chat request failed");
       }
 
-      const result = (await response.json()) as Record<string, unknown>;
-      const assistantText = parseAssistantText(result);
-      if (!assistantText) {
-        throw new Error("Assistant returned empty response");
+      if (!response.body) {
+        throw new Error("No stream body from assistant");
       }
 
-      updateSession(activeSession.id, [
-        ...nextMessages,
-        {
-          id: buildId(),
-          role: "assistant",
-          content: assistantText,
-        },
-      ]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let gotToken = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          const event = JSON.parse(trimmed) as Record<string, unknown>;
+          if (event.type === "token" && typeof event.token === "string") {
+            gotToken = true;
+            appendAssistantChunk(activeSession.id, assistantId, event.token);
+          }
+          if (event.type === "error") {
+            throw new Error(
+              typeof event.details === "string" ? event.details : "Stream error"
+            );
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        const event = JSON.parse(buffer.trim()) as Record<string, unknown>;
+        if (event.type === "token" && typeof event.token === "string") {
+          gotToken = true;
+          appendAssistantChunk(activeSession.id, assistantId, event.token);
+        }
+        if (event.type === "error") {
+          throw new Error(typeof event.details === "string" ? event.details : "Stream error");
+        }
+      }
+
+      if (!gotToken) {
+        throw new Error("Assistant returned empty response");
+      }
 
       if (activeSession.projectId) {
         setProjects((prev) =>
