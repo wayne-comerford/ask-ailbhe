@@ -78,6 +78,7 @@ export default function Home() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState("");
 
+  const [models, setModels] = useState<OllamaModel[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
@@ -194,6 +195,7 @@ export default function Home() {
       }
       const payload = (await response.json()) as ModelsPayload;
       const available: OllamaModel[] = Array.isArray(payload.models) ? payload.models : [];
+      setModels(available);
       setSelectedModel((current) => {
         if (!available.length) return "";
         if (available.some((model) => model.name === current)) return current;
@@ -585,6 +587,19 @@ export default function Home() {
                 >
                   New chat
                 </button>
+                <select
+                  value={selectedModel}
+                  onChange={(event) => setSelectedModel(event.target.value)}
+                  className="max-w-[220px] rounded-md border border-[#3f3f3f] bg-[#242424] px-2.5 py-1 text-xs text-[#cfcfcf] focus:outline-none"
+                  aria-label="Model selection"
+                >
+                  {models.length === 0 && <option value="">No models</option>}
+                  {models.map((model) => (
+                    <option key={model.name} value={model.name}>
+                      {model.name}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   onClick={() => void fetchModels()}
