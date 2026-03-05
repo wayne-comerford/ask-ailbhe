@@ -39,7 +39,8 @@ type ModelsPayload = {
   models?: OllamaModel[];
 };
 
-const STORAGE_KEY = "ask-ailbhe-state-v2";
+const STORAGE_KEY = "ask-ailbhe-state";
+const LEGACY_STORAGE_KEYS = ["ask-ailbhe-state-v2", "ask-ailbhe-chat-sessions-v1"];
 const SYSTEM_PROMPT =
   "You are Ask Ailbhe, a helpful local assistant. Keep answers concise, practical, and easy to read.";
 
@@ -91,7 +92,17 @@ export default function Home() {
     void fetchModels();
 
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const readPersisted = () => {
+        const primary = window.localStorage.getItem(STORAGE_KEY);
+        if (primary) return primary;
+        for (const legacyKey of LEGACY_STORAGE_KEYS) {
+          const value = window.localStorage.getItem(legacyKey);
+          if (value) return value;
+        }
+        return null;
+      };
+
+      const raw = readPersisted();
       if (!raw) {
         const defaultProject = createDefaultProject();
         const initialSession = createSession(defaultProject.id);
@@ -102,26 +113,60 @@ export default function Home() {
         return;
       }
 
-      const parsed = JSON.parse(raw) as AppState;
-      const safeProjects = Array.isArray(parsed.projects) ? parsed.projects : [];
-      const safeSessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
+      const parsed = JSON.parse(raw) as unknown;
+      const isAppState =
+        parsed &&
+        typeof parsed === "object" &&
+        "projects" in parsed &&
+        "sessions" in parsed;
+
+      const safeProjects = isAppState
+        ? (Array.isArray((parsed as AppState).projects) ? (parsed as AppState).projects : [])
+        : [];
+
+      // Legacy import path: older schema stored only an array of sessions.
+      const safeSessionsRaw = isAppState
+        ? (Array.isArray((parsed as AppState).sessions) ? (parsed as AppState).sessions : [])
+        : (Array.isArray(parsed) ? parsed : []);
+
+      const fallbackProjectId = safeProjects[0]?.id ?? createDefaultProject().id;
+      const safeSessions = safeSessionsRaw.map((session) => {
+        const entry = session as Partial<ChatSession>;
+        return {
+          id: typeof entry.id === "string" ? entry.id : buildId(),
+          title: typeof entry.title === "string" ? entry.title : "New chat",
+          messages: Array.isArray(entry.messages) ? entry.messages : [],
+          updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : Date.now(),
+          projectId:
+            typeof entry.projectId === "string" || entry.projectId === null
+              ? entry.projectId
+              : fallbackProjectId,
+        } satisfies ChatSession;
+      });
 
       if (safeProjects.length === 0) {
         const defaultProject = createDefaultProject();
-        const initialSession = createSession(defaultProject.id);
+        const migratedSessions =
+          safeSessions.length > 0
+            ? safeSessions.map((session) => ({
+                ...session,
+                projectId: session.projectId ?? defaultProject.id,
+              }))
+            : [createSession(defaultProject.id)];
         setProjects([defaultProject]);
-        setSessions([initialSession]);
+        setSessions(migratedSessions);
         setActiveProjectId(defaultProject.id);
-        setActiveSessionId(initialSession.id);
+        setActiveSessionId(migratedSessions[0]?.id ?? "");
         return;
       }
 
       setProjects(safeProjects);
       setSessions(safeSessions.length > 0 ? safeSessions : [createSession(safeProjects[0].id)]);
-      setActiveProjectId(parsed.activeProjectId ?? safeProjects[0].id);
+      const appState = isAppState ? (parsed as AppState) : null;
+      setActiveProjectId(appState?.activeProjectId ?? safeProjects[0].id);
       setActiveSessionId(
-        parsed.activeSessionId && safeSessions.some((session) => session.id === parsed.activeSessionId)
-          ? parsed.activeSessionId
+        appState?.activeSessionId && safeSessions.some((session) => session.id === appState.activeSessionId)
+          ? appState.activeSessionId
           : safeSessions[0]?.id ?? ""
       );
     } catch {
